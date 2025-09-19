@@ -1,0 +1,817 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HRサービスの委託範囲</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet"/>
+
+  <style>
+    body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; }
+    .accordion-content { max-height: 0; overflow: hidden; transition: max-height .5s ease, padding .5s ease; padding: 0 1.5rem; }
+    .accordion-content.open { max-height: 1000px; padding: 1rem 1.5rem; }
+    .accordion-icon { transition: transform .3s ease; }
+    .accordion-header.open .accordion-icon { transform: rotate(90deg); }
+    .tab.active { background-color: #0284c7; color: #fff; box-shadow: 0 4px 6px -1px rgb(0 0 0 / .1), 0 2px 4px -2px rgb(0 0 0 / .1);}
+    .task-item { transition: background-color .2s ease; }
+    .modal { transition: opacity .25s ease; }
+    .modal-content { transition: transform .25s ease; }
+    /* 編集モードのコントロール（ON時だけ表示） */
+    .edit-controls { display: none; }
+    .editing .edit-controls { display: flex; }
+    .icon-btn { line-height: 1; padding: .25rem .4rem; font-size: .75rem; border-radius: .375rem; }
+    .btn-sky { background: #e0f2fe; color: #075985; }
+    .btn-rose { background: #ffe4e6; color: #9f1239; }
+    .btn-gray { background: #e5e7eb; color: #111827; }
+    .tab-wrap.editing .tab { position: relative; padding-right: 2.5rem; }
+    .tab-wrap.editing .tab .tab-controls { position: absolute; right: .25rem; top: .25rem; display: flex; gap: .25rem; }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <div class="container mx-auto p-4 md:p-8">
+    <!-- ヘッダー -->
+    <header class="mb-4 md:mb-6">
+      <div class="text-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-slate-900">HRサービスの委託範囲</h1>
+        <p class="mt-3 text-slate-600 max-w-2xl mx-auto">
+          各項目をクリックして、委託可能な業務の詳細をご確認ください。お客様のニーズに合わせて柔軟にサポートいたします。
+        </p>
+      </div>
+
+      <!-- 右上：編集UI -->
+      <div class="mt-4 flex justify-center md:justify-end gap-2">
+        <button id="edit-toggle" class="px-4 py-2 rounded-lg text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
+          ✏️ 編集モード：OFF
+        </button>
+        <button id="add-tab" class="px-3 py-2 rounded-lg text-sm font-semibold bg-sky-600 text-white hover:bg-sky-700">
+          ＋ タブ追加
+        </button>
+        <button id="del-tab" class="px-3 py-2 rounded-lg text-sm font-semibold bg-rose-100 text-rose-800 hover:bg-rose-200">
+          タブ削除
+        </button>
+        <button id="reset-all" class="px-3 py-2 rounded-lg text-sm font-semibold bg-slate-200 hover:bg-slate-300">
+          全体リセット
+        </button>
+      </div>
+    </header>
+
+    <!-- タブ -->
+    <nav id="tabs-container" class="tab-wrap grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mb-6"></nav>
+
+    <!-- コンテンツ -->
+    <main id="content-container" class="bg-white p-6 rounded-2xl shadow-lg min-h-[400px]">
+      <div id="initial-message" class="flex items-center justify-center h-full text-slate-500">
+        <p>上のカテゴリを選択してください。</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- 閲覧モーダル -->
+  <div id="task-modal" class="modal fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+    <div class="modal-content w-full max-w-lg bg-white rounded-2xl shadow-xl p-8 transform scale-95">
+      <div class="flex justify-between items-start mb-4">
+        <h2 id="modal-title" class="text-2xl font-bold text-slate-900"></h2>
+        <button id="close-modal-btn" class="text-slate-500 hover:text-slate-800">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <h3 class="font-semibold text-sky-600">業務内容</h3>
+          <p id="modal-description" class="mt-1 text-slate-600"></p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-sky-600">作業時間の目安</h3>
+          <p id="modal-time" class="mt-1 text-slate-600"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編集モーダル（タスク用） -->
+  <div id="edit-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+    <div class="w-full max-w-xl bg-white rounded-2xl shadow-xl p-6">
+      <div class="flex justify-between items-start mb-4">
+        <h2 class="text-xl font-bold text-slate-900">文言の編集</h2>
+        <button id="edit-close" class="text-slate-500 hover:text-slate-800">✕</button>
+      </div>
+      <p id="edit-path" class="text-xs text-slate-500 mb-3"></p>
+      <form id="edit-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700">タイトル（name）</label>
+          <input id="edit-name" type="text" class="mt-1 w-full rounded-md border-slate-300"/>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700">作業時間の目安（time）</label>
+          <input id="edit-time" type="text" class="mt-1 w-full rounded-md border-slate-300"/>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700">説明（description）</label>
+          <textarea id="edit-description" rows="5" class="mt-1 w-full rounded-md border-slate-300"></textarea>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" id="edit-cancel" class="px-4 py-2 rounded-lg bg-slate-200 hover:bg-slate-300">キャンセル</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    /**********************
+     * データ本体
+     **********************/
+    let serviceData = {
+      /* --- ここはご提供の巨大データそのまま（省略せずに貼り付け）--- */
+      /* ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ */
+      "給与計算": {
+        "事前準備・マスタ管理": {
+          "社員情報の更新・確認": [
+            { name: "新入社員の登録（基本情報、給与条件、口座情報等）", time: "要相談", description: "入社に伴う社員の基本情報、給与、口座等をシステムに正確に登録します。" },
+            { name: "退職者の処理（退職日、最終支給額確認）", time: "要相談", description: "退職者の情報をシステム上で更新し、最終的な給与支払額を確認します。" },
+            { name: "異動・昇格・降格・休職情報の反映", time: "要相談", description: "人事異動情報をシステムに反映し、給与計算への影響を確認します。" },
+            { name: "扶養家族の追加・削除（所得税控除対象の見直し）", time: "要相談", description: "扶養家族の変更に伴い、所得税の控除額を再計算・設定します。" },
+            { name: "通勤手当の更新（距離・交通経路・上限確認）", time: "要相談", description: "通勤経路や手段の変更に伴う手当額を更新します。" },
+            { name: "賞与・特別手当支給予定者の登録", time: "要相談", description: "賞与やインセンティブなどの特別手当の対象者と金額を登録します。" }
+          ],
+          "社会保険・税情報の更新": [
+            { name: "健康保険・厚生年金の標準報酬月額の更新", time: "要相談", description: "算定基礎届に基づき、全従業員の標準報酬月額を年に一度更新します。" },
+            { name: "雇用保険の加入・喪失処理", time: "要相談", description: "入退社に伴う雇用保険の資格取得・喪失手続きを代行します。" },
+            { name: "住民税の異動届・税額通知の更新", time: "要相談", description: "市区町村からの住民税額通知をシステムに反映します。" },
+            { name: "マイナンバー登録・管理", time: "要相談", description: "従業員のマイナンバーを安全な方法で収集・管理します。" }
+          ]
+        },
+        "勤怠集計": {
+          "勤怠データの収集": [
+            { name: "勤怠打刻データのCSV/PDF出力（またはAPI連携）", time: "要相談", description: "勤怠システムから全従業員の打刻データを抽出し、集計準備をします。" },
+            { name: "シフト勤務者の確定スケジュール取り込み", time: "要相談", description: "確定したシフト表を勤怠システムに取り込みます。" },
+            { name: "有休・代休・振休の残日数と使用確認", time: "要相談", description: "全従業員の休暇取得状況と残日数を管理簿と照合し、正確性を確認します。" },
+            { name: "残業・深夜・休日労働時間の集計", time: "要相談", description: "勤怠データから各種割増賃金の対象となる労働時間を集計します。" },
+            { name: "欠勤・遅刻・早退の取得・申請状況の確認", time: "要相談", description: "控除対象となる不就労時間を確認・集計します。" }
+          ],
+          "勤怠確認と不備対応": [
+            { name: "打刻漏れ・二重打刻のチェック", time: "要相談", description: "システムログを確認し、打刻の不備がある従業員を特定し、修正を促します。" },
+            { name: "承認未処理の申請一覧チェック", time: "要相談", description: "締め日前に未承認の勤怠関連申請をリストアップし、承認を依頼します。" },
+            { name: "エラー勤怠の一覧出力 → 各部門へ修正依頼", time: "要相談", description: "システムで検出されたエラー勤怠をリスト化し、各部門の管理者へ確認・修正を依頼します。" }
+          ]
+        },
+        "給与計算実行": {
+          "各種手当・控除の計算": [
+            { name: "残業・深夜・休日手当の計算", time: "要相談", description: "勤怠データに基づき、全従業員の割増賃金を正確に計算します。" },
+            { name: "役職・資格・住宅手当等の固定手当の反映", time: "要相談", description: "毎月固定で支払われる各種手当を給与計算に反映します。" },
+            { name: "欠勤・遅刻・早退控除の計算", time: "要相談", description: "不就労時間に基づき、給与からの控除額を計算します。" },
+            { name: "社会保険料（健康保険・厚生年金・雇用保険）の控除", time: "要相談", description: "標準報酬月額と保険料率に基づき、各社会保険料を計算・控除します。" },
+            { name: "所得税・住民税の控除", time: "要相談", description: "源泉徴収税額表および市区町村からの通知に基づき、税金を控除します。" },
+            { name: "その他控除（財形貯蓄、組合費等）の反映", time: "要相談", description: "従業員ごとに定められたその他の控除項目を給与計算に反映します。" }
+          ],
+          "計算結果の確認": [
+            { name: "計算結果の一次チェック（異常値・前月比較）", time: "要相談", description: "計算結果に異常な数値がないか、前月のデータと比較して確認します。" },
+            { name: "部門長・担当者への確認依頼", time: "要相談", description: "計算結果を関係者に共有し、最終確認を依頼します。" },
+            { name: "修正・再計算の実行", time: "要相談", description: "確認依頼で発生した修正点を反映し、再計算を行います。" }
+          ]
+        },
+        "給与明細・振込": {
+          "給与明細の作成・配付": [
+            { name: "給与明細書の作成（PDF/Web明細）", time: "要相談", description: "確定した給与計算結果を基に、従業員ごとの給与明細書を作成します。" },
+            { name: "従業員への配付（メール・システム経由）", time: "要相談", description: "作成した給与明細書を、指定された方法で従業員へ配付します。" }
+          ],
+          "振込データの作成": [
+            { name: "FB（ファームバンキング）データの作成", time: "要相談", description: "金融機関のシステムに取り込むための振込データを作成します。" },
+            { name: "総合振込依頼書の作成", time: "要相談", description: "FBデータと合わせて金融機関に提出する総合振込依頼書を作成します。" }
+          ]
+        },
+        "月次・年次処理": {
+          "月次報告": [ { name: "部門別・個人別人件費レポートの作成", time: "要相談", description: "経営判断に資する人件費関連のレポートを作成・提供します。" } ],
+          "賞与計算": [ { name: "賞与支給額の計算・明細作成・FBデータ作成", time: "要相談", description: "賞与の計算から明細作成、振込データ作成までを一括して行います。" } ],
+          "年末調整": [
+            { name: "申告書の配布・回収・内容チェック", time: "要相談", description: "年末調整に必要な各種申告書を従業員に配布し、回収した内容をチェックします。" },
+            { name: "年税額の計算・過不足調整", time: "要相談", description: "申告書の内容を基に年間の所得税額を確定させ、過不足額を計算します。" },
+            { name: "源泉徴収票の作成・配付", time: "要相談", description: "年末調整の結果を反映した源泉徴収票を作成し、従業員に配付します。" },
+            { name: "給与支払報告書の作成・提出", time: "要相談", description: "各市区町村へ提出するための給与支払報告書を作成します。" }
+          ]
+        }
+      },
+      "勤怠管理": {
+        "勤怠ルール設定・マスタ整備": {
+          "主な業務": [
+            { name: "勤務形態（固定／フレックス／シフト）の設定支援、勤怠システムへの反映", time: "要相談", description: "貴社の就業規則に合わせた勤務形態を勤怠システムに設定します。" },
+            { name: "勤務時間・休憩時間・所定労働時間の整備とシステム設定", time: "要相談", description: "労働基準法に準拠した勤務・休憩時間をシステムに設定します。" },
+            { name: "休日・休暇ルール（週休、祝日、振休、代休）の設計・設定代行", time: "要相談", description: "法定休日や各種休暇のルールを設計し、システムに反映します。" },
+            { name: "打刻方法の設定支援（PC／ICカード／スマホ／手動等のルール設計）", time: "要相談", description: "事業所の実態に合わせた最適な打刻方法のルール設計を支援します。" },
+            { name: "有給付与ルール・管理方法の設定支援（付与基準、端数処理など）", time: "要相談", description: "年次有給休暇の付与日数や管理方法をシステムに設定します。" },
+            { name: "36協定内容に基づいた残業上限ルールの登録支援", time: "要相談", description: "36協定で定められた時間外労働の上限値をシステムに設定し、アラート機能を活用します。" }
+          ]
+        },
+        "月初・日常運用": {
+          "勤怠打刻の運用と確認": [
+            { name: "打刻データの定期確認・初期エラー抽出対応", time: "要相談", description: "日々の打刻データを監視し、システムエラーなどを早期に発見・対応します。" },
+            { name: "打刻漏れ・修正申請の内容確認とシステム処理", time: "要相談", description: "従業員からの打刻修正申請の内容を精査し、システムに反映します。" },
+            { name: "日々の遅刻・早退・早出の検知と報告（基準設定可）", time: "要相談", description: "設定された基準に基づき、遅刻・早退・早出を検知し、管理者へ報告します。" },
+            { name: "外勤・直行直帰時の勤怠登録ルール整備・申請補助", time: "要相談", description: "事業所外での勤務に関する勤怠登録のルールを整備し、運用をサポートします。" }
+          ],
+          "勤怠申請の受付・承認": [
+            { name: "有給休暇・特別休暇の申請内容確認・システム処理", time: "要相談", description: "各種休暇申請の内容を確認し、社内ルールに基づきシステム上で処理します。" },
+            { name: "残業申請（事前申請）の受領・内容チェック・承認フォロー", time: "要相談", description: "事前残業申請を受け付け、内容を確認し、承認者へのフォローを行います。" },
+            { name: "振替休日・代休取得の申請内容確認と承認処理", time: "要相談", description: "休日出勤に伴う振替休日や代休の申請を管理・処理します。" },
+            { name: "出張・在宅勤務・時短勤務等の申請ルール整備と受付対応", time: "要相談", description: "多様な働き方に関する勤怠申請のルールを整備し、受付を代行します。" }
+          ]
+        },
+        "月中処理・随時確認": {
+          "主な業務": [
+            { name: "過重労働該当者（80h/100h超）の抽出・レポート作成", time: "要相談", description: "月の残業時間が法定の上限を超えそうな従業員を早期に検出し、アラートレポートを作成します。" },
+            { name: "月間残業時間のモニタリングとアラート通知の運用代行", time: "要相談", description: "従業員ごとの残業時間をモニタリングし、設定した閾値を超えた場合に通知します。" },
+            { name: "有給休暇の年5日取得義務モニタリング・警告発信", time: "要相談", description: "有給休暇の取得義務を果たしていない従業員を抽出し、取得を促します。" }
+          ]
+        },
+        "月次・年次処理": {
+          "勤怠締め処理": [
+            { name: "勤怠データの最終チェック・エラー修正依頼", time: "要相談", description: "給与計算前に、勤怠データ全体の最終確認と修正依頼を行います。" },
+            { name: "未承認申請の最終確認・承認依頼", time: "要相談", description: "締め処理前に、未承認の申請が残っていないか最終確認を行います。" },
+            { name: "勤怠データの締め処理・確定", time: "要相談", description: "全ての確認が完了した後、勤怠データを締め処理し、編集不可の状態にします。" }
+          ],
+          "レポート作成": [
+            { name: "時間外労働・休日労働に関する協定届（36協定）の作成支援", time: "要相談", description: "労働基準監督署へ提出する36協定の作成を支援します。" },
+            { name: "月次勤怠レポート（残業時間、有休取得率等）の作成", time: "要相談", description: "勤怠状況に関する月次レポートを作成し、経営改善に役立てます。" }
+          ]
+        }
+      },
+       "入社対応": {
+                "事前準備（入社前）": {
+                    "雇用条件・契約書関連": [
+                        { name: "採用決定通知のドラフト作成支援", time: "要相談", description: "採用が決定した候補者への通知書のドラフト作成を支援します。" },
+                        { name: "雇用契約書の作成補助・電子契約システムを活用した送付・回収（クラウドサイン等）", time: "要相談", description: "指定のテンプレートを基に雇用契約書を作成し、電子契約サービスで送付・進捗管理を行います。" },
+                        { name: "労働条件通知書の作成補助・送付（PDF＋メール）", time: "要相談", description: "労働条件通知書を作成し、入社予定者へ送付します。" },
+                        { name: "契約内容の社内共有用フォーマット整備（給与・所属・上長情報など）", time: "要相談", description: "入社者の情報を関係部署へスムーズに共有するためのフォーマットを整備します。" },
+                        { name: "回収後の契約書内容確認・不備のチャット連絡", time: "要相談", description: "回収した契約書の内容を確認し、不備があった場合は本人へ連絡します。" }
+                    ],
+                    "必要書類の案内・収集": [
+                        { name: "入社書類一覧の作成・案内送付（PDF/Googleフォーム等で案内）", time: "要相談", description: "入社時に必要な書類のリストを作成し、入社予定者へ案内します。" },
+                        { name: "書類回収状況の進捗管理・不備チェック（チャット・メールでリマインド）", time: "要相談", description: "入社予定者からの書類提出状況を管理し、提出された書類に不備がないかを確認します。" }
+                    ],
+                    "社内準備・手配": [
+                        { name: "システム登録用の情報収集シート（フォーム等）作成・配布", time: "要相談", description: "各種システムへの登録に必要な情報を収集するためのシートを作成・配布します。" },
+                        { name: "アカウント発行依頼・台帳記録（Google／Slack／勤怠／給与システム等）", time: "要相談", description: "業務に必要な各種アカウントの発行を依頼し、管理台帳に記録します。" }
+                    ]
+                },
+                "入社日当日の対応": {
+                    "書類提出・回収": [ { name: "入社時書類の回収チェック（健康保険／年金等）", time: "要相談", description: "入社日当日に、必要な公的書類がすべて提出されているかを確認します。" } ],
+                    "オリエンテーション支援": [ { name: "入社手続きに関する説明・案内代行", time: "要相談", description: "入社手続きに関するオリエンテーションの一部を代行します。" } ]
+                },
+                "入社後の手続き": {
+                    "社会保険・雇用保険": [
+                        { name: "健康保険・厚生年金保険資格取得届の作成・提出代行", time: "要相談", description: "年金事務所や健康保険組合への資格取得届の作成・提出を代行します。" },
+                        { name: "雇用保険被保険者資格取得届の作成・提出代行", time: "要相談", description: "ハローワークへの雇用保険資格取得届の作成・提出を代行します。" }
+                    ],
+                    "システム本登録": [ { name: "人事労務freee等の人事情報システムへの本登録", time: "要相談", description: "収集した情報を基に、人事労務システムへ従業員情報を本登録します。" } ]
+                }
+            },
+            "退社対応": {
+                "退職届受理・初期対応": {
+                    "書類・意思確認": [
+                        { name: "退職願・退職届の受理（チャット・メール・Gフォームなど）", time: "要相談", description: "従業員からの退職の申し出を受理します。" },
+                        { name: "退職承認フローの実施（役員／部門長承認など）", time: "要相談", description: "社内規定に沿った退職承認のプロセスを実施します。" }
+                    ],
+                    "各種登録の停止準備": [
+                        { name: "給与／勤怠／人事システム上の退職フラグ設定", time: "要相談", description: "各種システムにおいて、退職予定者としてフラグを設定します。" },
+                        { name: "各種アカウント停止日・削除予定の確認", time: "要相談", description: "退職日以降に停止・削除するアカウントのリストアップと日程を確認します。" },
+                        { name: "最終出勤日の決定（有給消化含む）", time: "要相談", description: "本人と調整の上、最終出勤日を確定させます。" }
+                    ]
+                },
+                "退職通知・社内調整": {
+                    "通知": [ { name: "社内ポータル（メール／掲示等）", time: "要相談", description: "関係者へ退職に関する情報を通知します。" } ]
+                },
+                "退職日までの対応": {
+                    "本人対応": [
+                        { name: "社用PC、スマホ、備品等の返却リスト作成", time: "要相談", description: "退職日までに返却が必要な貸与品のリストを作成し、本人に通知します。" },
+                        { name: "有休残日数の確認と取得調整", time: "要相談", description: "退職予定者の有給休暇残日数を確認し、最終出勤日までの取得計画の調整をサポートします。" }
+                    ],
+                    "書類案内・提出": [ { name: "離職票交付希望確認", time: "要相談", description: "退職後の手続きに必要な離職票の交付を希望するか、本人に確認します。" } ]
+                },
+                "退職日当日の対応": {
+                    "記録・処理": [
+                        { name: "勤怠最終日の記録（打刻・修正含む）", time: "要相談", description: "最終出勤日の勤怠記録を確定させます。" },
+                        { name: "最終出勤の記録と退職処理実行（システム）", time: "要相談", description: "システム上で正式に退職処理を実行します。" }
+                    ]
+                },
+                "退職後の事務処理": {
+                    "労務・法令関連手続き": [
+                        { name: "雇用保険資格喪失届の情報収集・帳票作成支援", time: "要相談", description: "ハローワークへ提出する雇用保険資格喪失届の作成を支援します。" },
+                        { name: "離職票の作成・送付", time: "要相談", description: "退職者から希望があった場合、ハローワークに提出するための離職票を作成し、本人へ送付します。" },
+                        { name: "住民税の異動届作成・各市区町村への送付", time: "要相談", description: "退職に伴う住民税の異動届を作成し、各市区町村へ送付します。" },
+                        { name: "健康保険資格喪失証明書の発行依頼", time: "要相談", description: "国民健康保険への切り替えに必要な資格喪失証明書の発行を依頼します。" }
+                    ],
+                    "源泉徴収票": [ { name: "源泉徴収票の作成・送付", time: "要相談", description: "その年に支払った給与総額などを記載した源泉徴収票を作成し、本人へ送付します。" } ]
+                }
+            },
+            "ストレスチェック": {
+                "実施準備": {
+                    "対象者の確認": [
+                        { name: "実施義務対象者の抽出（常時50人以上の事業所）", time: "要相談", description: "労働安全衛生法に基づき、ストレスチェックの実施義務がある事業所の対象者を抽出します。" },
+                        { name: "対象者リストの作成・労働者区分の整理", time: "要相談", description: "抽出した対象者のリストを作成し、役員や派遣社員などの区分を整理します。" }
+                    ],
+                    "実施スケジュール策定": [ { name: "社内通知、実施日程、回答期限等の設計", time: "要相談", description: "ストレスチェックを円滑に進めるための全体スケジュールを設計します。" } ]
+                },
+                "実施案内・実施": {
+                    "社内通知": [ { name: "対象者へ実施案内の配信（メール・掲示等）", time: "要相談", description: "全対象者へ、ストレスチェックの実施について案内します。" } ],
+                    "回答フォロー": [ { name: "未回答者へのリマインド対応", time: "要相談", description: "回答期限前に、未回答の従業員に対してリマインドの通知を行います。" } ]
+                },
+                "結果処理": {
+                    "集計・分析": [ { name: "実施者による集計・データ整理（外部委託含む）", time: "要相談", description: "回答結果を集計し、職場ごとのストレス状況を分析します。" } ],
+                    "高ストレス者対応": [ { name: "本人への通知、医師面談申出の案内", time: "要相談", description: "高ストレス者と判定された従業員へ結果を通知し、医師による面談を案内します。" } ],
+                    "医師面談調整": [ { name: "面談希望者への対応・日程調整", time: "要相談", description: "高ストレス者と判定され、医師の面談を希望する従業員の面談日程を調整します。" } ]
+                },
+                "事後処理": {
+                    "会社向け報告": [ { name: "事業者向け結果報告資料の作成・送付", time: "要相談", description: "集計・分析結果を基に、事業者向けの報告書を作成します。" } ]
+                },
+                "関連帳票一覧": {
+                    "主な業務": [
+                        { name: "ストレスチェック結果通知書（個人）", time: "要相談", description: "従業員個人へ渡すストレスチェックの結果通知書です。" },
+                        { name: "面談記録（医師面談実施時）", time: "要相談", description: "医師による面談指導が実施された際の記録です。" }
+                    ]
+                }
+            },
+            "健康診断": {
+                "実施準備": {
+                    "対象者確認": [ { name: "定期健康診断・雇入時健康診断などの対象者抽出", time: "要相談", description: "法律で定められた各種健康診断の対象となる従業員を抽出します。" } ],
+                    "実施方法選定": [ { name: "提携医療機関の選定、または巡回健診業者との調整", time: "要相談", description: "健康診断を実施する医療機関の選定や、巡回健診の手配を調整します。" } ],
+                    "日程調整": [ { name: "実施日・予約方法・実施会場の案内準備", time: "要相談", description: "健康診断の具体的な実施日時や予約方法を決定し、案内の準備をします。" } ]
+                },
+                "案内・予約": {
+                    "対象者案内": [ { name: "対象者へ受診案内・予約方法の周知（メール等）", time: "要相談", description: "全対象者へ、健康診断の受診について案内します。" } ],
+                    "回答管理": [ { name: "受診予約状況の管理、未対応者へのフォロー", time: "要相談", description: "全従業員の健康診断の予約状況を管理し、未予約者へ受診を促す連絡を行います。" } ]
+                },
+                "結果管理": {
+                    "結果収集": [ { name: "医療機関からの結果回収・対象者への結果送付", time: "要相談", description: "医療機関から健康診断の結果を回収し、従業員本人へ送付します。" } ],
+                    "産業医面談調整": [ { name: "有所見・要面談対象者の抽出と面談調整", time: "要相談", description: "健康診断結果に基づき、産業医との面談が必要な従業員を抽出し、面談をセッティングします。" } ],
+                    "会社向け集計": [ { name: "所見あり率や受診率等の集計・報告", time: "要相談", description: "健康診断の結果を基に、事業所全体の健康状態に関するレポートを作成します。" } ]
+                },
+                "関連帳票一覧": {
+                    "主な業務": [
+                        { name: "健康診断結果一覧（事業所別・個人別）", time: "要相談", description: "健康診断の結果を一覧で管理するための帳票です。" },
+                        { name: "医師面談記録（有所見者）", time: "要相談", description: "産業医による面談が実施された際の記録です。" },
+                        { name: "実施報告書（会社用）", time: "要相談", description: "健康診断の実施状況をまとめた事業者向けの報告書です。" },
+                        { name: "健康診断未受診者リスト", time: "要相談", description: "健康診断をまだ受診していない従業員のリストです。" }
+                    ]
+                }
+            }
+        };
+
+    /**********************
+     * 永続化（localStorage）
+     **********************/
+    const STORAGE_KEY = 'hr_service_catalog_v2';
+
+    // 保存済みがあれば読み込み
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && typeof saved === 'object') serviceData = saved;
+      }
+    } catch(e){ console.warn(e); }
+
+    const saveAll = () => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serviceData)); }
+      catch(e){ alert('保存に失敗しました'); }
+    };
+
+    /**********************
+     * DOM参照
+     **********************/
+    const tabsContainer = document.getElementById('tabs-container');
+    const contentContainer = document.getElementById('content-container');
+    const initialMessage = document.getElementById('initial-message');
+
+    const modal = document.getElementById('task-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDescription = document.getElementById('modal-description');
+    const modalTime = document.getElementById('modal-time');
+
+    const editToggle = document.getElementById('edit-toggle');
+    const addTabBtn = document.getElementById('add-tab');
+    const delTabBtn = document.getElementById('del-tab');
+    const resetAllBtn = document.getElementById('reset-all');
+
+    // 編集モーダル
+    const editModal = document.getElementById('edit-modal');
+    const editClose = document.getElementById('edit-close');
+    const editCancel = document.getElementById('edit-cancel');
+    const editForm  = document.getElementById('edit-form');
+    const editPath  = document.getElementById('edit-path');
+    const inName = document.getElementById('edit-name');
+    const inTime = document.getElementById('edit-time');
+    const inDesc = document.getElementById('edit-description');
+
+    /**********************
+     * ユーティリティ
+     **********************/
+    let editMode = false;
+    let currentEdit = null; // {category, middle, small, index}
+
+    const setEditMode = (on) => {
+      editMode = on;
+      document.body.classList.toggle('editing', on);
+      editToggle.textContent = on ? '✏️ 編集モード：ON' : '✏️ 編集モード：OFF';
+      renderTabs();
+      // 現在のタブを保持して再描画
+      const active = document.querySelector('.tab.active')?.dataset.category;
+      if (active) renderContent(active);
+    };
+
+    const objectKeys = (obj) => Object.keys(obj || {});
+    // オブジェクトのキー順を入れ替える（左右/上下移動で使用）
+    function reorderKey(obj, key, dir){
+      const keys = Object.keys(obj);
+      const i = keys.indexOf(key);
+      const j = dir === 'up' ? i-1 : i+1;
+      if (i < 0 || j < 0 || j >= keys.length) return;
+      const newObj = {};
+      keys.forEach((k, idx) => {
+        if (idx === i) return; // skip
+        if (idx === j && dir === 'down') newObj[key] = obj[key];
+        newObj[k] = obj[k];
+        if (idx === j-1 && dir === 'up') newObj[key] = obj[key];
+      });
+      // 置換
+      for (const k of Object.keys(obj)) delete obj[k];
+      for (const k of Object.keys(newObj)) obj[k] = newObj[k];
+    }
+    function moveArray(arr, index, dir){
+      const j = dir === 'up' ? index-1 : index+1;
+      if (index < 0 || j < 0 || j >= arr.length) return;
+      const [it] = arr.splice(index,1);
+      arr.splice(j,0,it);
+    }
+
+    /**********************
+     * タブ描画
+     **********************/
+    function renderTabs(){
+      tabsContainer.innerHTML = '';
+      objectKeys(serviceData).forEach((category, idx, arr) => {
+        const tab = document.createElement('button');
+        tab.textContent = category;
+        tab.className = 'tab text-sm md:text-base font-semibold p-3 rounded-lg shadow-sm transition bg-white hover:bg-sky-100 focus:outline-none';
+        tab.dataset.category = category;
+
+        // 編集モード時：タブの並べ替えボタン
+        const wrap = document.createElement('div');
+        wrap.className = 'relative';
+        wrap.appendChild(tab);
+
+        if (editMode) {
+          const ctrls = document.createElement('div');
+          ctrls.className = 'tab-controls';
+          ctrls.innerHTML = `
+            <button class="icon-btn btn-sky" data-act="tab-left" title="左へ">←</button>
+            <button class="icon-btn btn-sky" data-act="tab-right" title="右へ">→</button>
+            <button class="icon-btn btn-gray" data-act="tab-rename" title="改名">改</button>
+          `;
+          wrap.appendChild(ctrls);
+
+          ctrls.addEventListener('click', (e) => {
+            const act = e.target?.dataset?.act;
+            if (!act) return;
+            if (act === 'tab-left') { reorderKey(serviceData, category, 'up'); saveAll(); renderTabs(); }
+            if (act === 'tab-right'){ reorderKey(serviceData, category, 'down'); saveAll(); renderTabs(); }
+            if (act === 'tab-rename'){
+              const newName = prompt('タブ名を変更', category);
+              if (newName && !serviceData[newName]) {
+                serviceData[newName] = serviceData[category];
+                delete serviceData[category];
+                saveAll(); renderTabs();
+              }
+            }
+          });
+        }
+
+        tabsContainer.appendChild(wrap);
+      });
+      tabsContainer.classList.toggle('editing', editMode);
+    }
+
+    tabsContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab');
+      if (!btn) return;
+      const category = btn.dataset.category;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      renderContent(category);
+    });
+
+    /**********************
+     * コンテンツ描画
+     **********************/
+    function renderContent(category){
+      if (initialMessage) initialMessage.style.display = 'none';
+      contentContainer.innerHTML = '';
+      const categoryData = serviceData[category];
+      if (!categoryData) return;
+
+      objectKeys(categoryData).forEach((middleItem, middleIndex) => {
+        const accordion = document.createElement('div');
+        accordion.className = 'border-b border-slate-200 last:border-b-0';
+
+        const header = document.createElement('div');
+        header.className = 'accordion-header flex items-center justify-between gap-3 p-4 cursor-pointer hover:bg-slate-50';
+
+        // 見出し＋編集ボタン
+        const left = document.createElement('div');
+        left.className = 'flex items-center gap-3';
+        left.innerHTML = `<h3 class="font-bold text-lg text-sky-700">${middleItem}</h3>`;
+
+        const right = document.createElement('div');
+        right.className = 'flex items-center gap-2';
+
+        // 編集モード時の中見出しコントロール
+        const midCtrls = document.createElement('div');
+        midCtrls.className = 'edit-controls items-center gap-2';
+        midCtrls.innerHTML = `
+          <button class="icon-btn btn-sky" data-action="middle-up" title="上へ">↑</button>
+          <button class="icon-btn btn-sky" data-action="middle-down" title="下へ">↓</button>
+          <button class="icon-btn btn-gray" data-action="middle-rename" title="改名">改</button>
+          <button class="icon-btn btn-sky" data-action="add-small" title="小見出し追加">＋小</button>
+          <button class="icon-btn btn-rose" data-action="del-middle" title="削除">削</button>
+        `;
+        right.appendChild(midCtrls);
+
+        const caret = document.createElement('svg');
+        caret.setAttribute('class','accordion-icon h-5 w-5 text-slate-500');
+        caret.setAttribute('xmlns','http://www.w3.org/2000/svg');
+        caret.setAttribute('viewBox','0 0 20 20');
+        caret.setAttribute('fill','currentColor');
+        caret.innerHTML = `<path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/>`;
+
+        header.appendChild(left);
+        header.appendChild(right);
+        header.appendChild(caret);
+
+        const content = document.createElement('div');
+        content.className = 'accordion-content bg-slate-50/70';
+
+        // 小見出し＋タスク
+        const smalls = categoryData[middleItem];
+        const html = objectKeys(smalls).map((smallItem) => {
+          const tasks = smalls[smallItem];
+
+          const title = (smallItem === '主な業務') ? '' : `
+            <div class="flex items-center justify-between mb-1">
+              <h4 class="font-semibold text-slate-700">${smallItem}</h4>
+              <div class="edit-controls items-center gap-2">
+                <button class="icon-btn btn-sky" data-action="small-up" data-small="${smallItem}">↑</button>
+                <button class="icon-btn btn-sky" data-action="small-down" data-small="${smallItem}">↓</button>
+                <button class="icon-btn btn-gray" data-action="small-rename" data-small="${smallItem}">改</button>
+                <button class="icon-btn btn-sky" data-action="add-task" data-small="${smallItem}">＋タスク</button>
+                <button class="icon-btn btn-rose" data-action="del-small" data-small="${smallItem}">削</button>
+              </div>
+            </div>
+          `;
+
+          const list = tasks.map((task, idx) => `
+            <li class="task-item flex items-center justify-between p-2 rounded-md hover:bg-sky-100 cursor-pointer" data-idx="${idx}" data-small="${smallItem}">
+              <div class="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-sky-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                <span class="task-name">${task.name}</span>
+              </div>
+              <div class="edit-controls items-center gap-1">
+                <button class="icon-btn btn-sky" data-action="task-up">↑</button>
+                <button class="icon-btn btn-sky" data-action="task-down">↓</button>
+                <button class="icon-btn btn-rose" data-action="del-task">削</button>
+              </div>
+            </li>
+          `).join('');
+
+          return `
+            <div class="mb-4 last:mb-0" data-small="${smallItem}">
+              ${title}
+              <ul class="mt-2 space-y-1 text-slate-600">${list}</ul>
+            </div>
+          `;
+        }).join('');
+
+        content.innerHTML = html;
+
+        accordion.appendChild(header);
+        accordion.appendChild(content);
+        contentContainer.appendChild(accordion);
+
+        header.addEventListener('click', (ev) => {
+          // 編集ボタン部分は開閉しない
+          if (ev.target.closest('.edit-controls')) return;
+          header.classList.toggle('open');
+          content.classList.toggle('open');
+        });
+
+        // 中見出し編集アクション
+        midCtrls.addEventListener('click', (e) => {
+          const act = e.target.dataset.action;
+          if (!act) return;
+          if (act === 'middle-rename') {
+            const nn = prompt('中見出しを変更', middleItem);
+            if (nn && !categoryData[nn]) {
+              categoryData[nn] = categoryData[middleItem];
+              delete categoryData[middleItem];
+              saveAll(); renderContent(category);
+            }
+          }
+          if (act === 'del-middle') {
+            if (!confirm(`中見出し「${middleItem}」を削除します。`)) return;
+            delete categoryData[middleItem]; saveAll(); renderContent(category);
+          }
+          if (act === 'add-small') {
+            const name = prompt('小見出し名');
+            if (!name) return;
+            categoryData[middleItem][name] = []; saveAll(); renderContent(category);
+            setTimeout(()=>header.click(),0);
+          }
+          if (act === 'middle-up') { reorderKey(categoryData, middleItem, 'up'); saveAll(); renderContent(category); }
+          if (act === 'middle-down'){ reorderKey(categoryData, middleItem, 'down'); saveAll(); renderContent(category); }
+        });
+
+      });
+    }
+
+    /**********************
+     * 閲覧モーダル
+     **********************/
+    function showModal(task){
+      modalTitle.textContent = task.name;
+      modalDescription.textContent = task.description;
+      modalTime.textContent = task.time;
+      modal.classList.remove('opacity-0','pointer-events-none');
+      modal.querySelector('.modal-content').classList.remove('scale-95');
+    }
+    function hideModal(){
+      modal.classList.add('opacity-0','pointer-events-none');
+      modal.querySelector('.modal-content').classList.add('scale-95');
+    }
+    closeModalBtn.addEventListener('click', hideModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+
+    /**********************
+     * クリック（閲覧/編集共通）
+     **********************/
+    // タスクリスト or 編集ボタン
+    contentContainer.addEventListener('click', (e) => {
+      const activeTab = document.querySelector('.tab.active')?.dataset.category;
+      if (!activeTab) return;
+
+      // 編集アクション
+      const btn = e.target.closest('[data-action]');
+      if (btn && editMode) {
+        // どの中見出しか
+        const contentBlock = btn.closest('.accordion-content');
+        const middle = contentBlock?.previousSibling?.querySelector('h3')?.textContent;
+        const small = btn.dataset.small || btn.closest('[data-small]')?.dataset.small;
+        const action = btn.dataset.action;
+
+        if (['small-up','small-down','small-rename','del-small','add-task'].includes(action)) {
+          const smalls = serviceData[activeTab][middle];
+          if (action === 'small-up')   { reorderKey(smalls, small, 'up'); saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0); }
+          if (action === 'small-down') { reorderKey(smalls, small, 'down'); saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0); }
+          if (action === 'small-rename') {
+            const nn = prompt('小見出しを変更', small);
+            if (nn && !smalls[nn]) { smalls[nn] = smalls[small]; delete smalls[small]; saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0); }
+          }
+          if (action === 'del-small') {
+            if (!confirm(`小見出し「${small}」を削除します。`)) return;
+            delete smalls[small]; saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0);
+          }
+          if (action === 'add-task') {
+            currentEdit = { category: activeTab, middle, small, index: -1 };
+            openEditModal({ name:'', time:'', description:'' }, `${activeTab} > ${middle} > ${small} [new]`);
+          }
+          return;
+        }
+
+        if (['task-up','task-down','del-task'].includes(action)) {
+          const li = btn.closest('.task-item');
+          const idx = Number(li.dataset.idx);
+          const arr = serviceData[activeTab][middle][li.dataset.small];
+          if (action === 'task-up')   { moveArray(arr, idx, 'up'); saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0); }
+          if (action === 'task-down') { moveArray(arr, idx, 'down'); saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0); }
+          if (action === 'del-task')  {
+            if (!confirm('このタスクを削除します。')) return;
+            arr.splice(idx,1); saveAll(); renderContent(activeTab); setTimeout(()=>contentBlock.previousSibling.click(),0);
+          }
+          return;
+        }
+      }
+
+      // 閲覧（編集モードOFF時）
+      const li = e.target.closest('.task-item');
+      if (li && !editMode) {
+        const contentBlock = li.closest('.accordion-content');
+        const middle = contentBlock?.previousSibling?.querySelector('h3')?.textContent;
+        const small = li.dataset.small;
+        const idx = Number(li.dataset.idx);
+        const task = serviceData[activeTab][middle][small][idx];
+        showModal(task);
+      }
+
+      // 編集（ON時：タスクをクリックで編集モーダル）
+      if (li && editMode) {
+        const contentBlock = li.closest('.accordion-content');
+        const middle = contentBlock?.previousSibling?.querySelector('h3')?.textContent;
+        const small = li.dataset.small;
+        const idx = Number(li.dataset.idx);
+        currentEdit = { category: activeTab, middle, small, index: idx };
+        const task = serviceData[activeTab][middle][small][idx];
+        openEditModal(task, `${activeTab} > ${middle} > ${small} [${idx}]`);
+      }
+    });
+
+    /**********************
+     * 編集モーダル（開閉・保存）
+     **********************/
+    function openEditModal(task, pathText){
+      editPath.textContent = pathText;
+      inName.value = task.name || '';
+      inTime.value = task.time || '';
+      inDesc.value = task.description || '';
+      editModal.classList.remove('hidden'); editModal.classList.add('flex');
+    }
+    function closeEditModal(){
+      editModal.classList.add('hidden'); editModal.classList.remove('flex');
+      currentEdit = null;
+    }
+    editClose.addEventListener('click', closeEditModal);
+    editCancel.addEventListener('click', closeEditModal);
+    editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditModal(); });
+
+    editForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!currentEdit) return;
+
+      const { category, middle, small, index } = currentEdit;
+      const arr = serviceData?.[category]?.[middle]?.[small];
+      if (!arr) return;
+
+      if (index === -1) {
+        arr.push({ name: inName.value, time: inTime.value, description: inDesc.value });
+      } else {
+        const target = arr[index];
+        if (!target) return;
+        target.name = inName.value;
+        target.time = inTime.value;
+        target.description = inDesc.value;
+      }
+      saveAll();
+      renderContent(category);
+      // 対象アコーディオン開いておく
+      setTimeout(() => {
+        const headers = [...contentContainer.querySelectorAll('h3')];
+        const h = headers.find(x => x.textContent === middle)?.parentElement;
+        if (h && !h.classList.contains('open')) h.click();
+      }, 0);
+      closeEditModal();
+    });
+
+    /**********************
+     * 右上ボタン（タブ追加/削除/リセット）
+     **********************/
+    addTabBtn.addEventListener('click', () => {
+      if (!editMode) return alert('編集モードをONにしてください');
+      const name = prompt('新しいタブ名（例：福利厚生）');
+      if (!name) return;
+      if (serviceData[name]) return alert('同名のタブが存在します');
+      serviceData[name] = {};
+      saveAll(); renderTabs();
+    });
+
+    delTabBtn.addEventListener('click', () => {
+      if (!editMode) return alert('編集モードをONにしてください');
+      const active = document.querySelector('.tab.active')?.dataset.category;
+      if (!active) return alert('削除するタブを選択してください');
+      if (!confirm(`タブ「${active}」を削除します。`)) return;
+      delete serviceData[active];
+      saveAll(); renderTabs(); contentContainer.innerHTML = '<div class="p-6 text-slate-500">上のカテゴリを選択してください。</div>';
+    });
+
+    resetAllBtn.addEventListener('click', () => {
+      if (!confirm('全体を初期状態に戻します。よろしいですか？')) return;
+      localStorage.removeItem(STORAGE_KEY); location.reload();
+    });
+
+    editToggle.addEventListener('click', () => setEditMode(!editMode));
+
+    /**********************
+     * 初期化
+     **********************/
+    renderTabs();
+    // 最初のタブを開く
+    const firstTab = tabsContainer.querySelector('.tab');
+    if (firstTab) { firstTab.classList.add('active'); renderContent(firstTab.dataset.category); }
+  </script>
+</body>
+</html>
