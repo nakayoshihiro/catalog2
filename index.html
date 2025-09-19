@@ -50,7 +50,7 @@
       <!-- 右上：編集UI -->
       <div class="mt-4 flex justify-center md:justify-end gap-2">
         <button id="edit-toggle" class="px-4 py-2 rounded-lg text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
-          ✏️ 編集モード：OFF
+          ✏️
         </button>
         <button id="add-tab" class="px-3 py-2 rounded-lg text-sm font-semibold bg-sky-600 text-white hover:bg-sky-700">
           ＋ タブ追加
@@ -429,19 +429,7 @@
     };
 
     const objectKeys = (obj) => Object.keys(obj || {});
-    // オブジェクトのキー順を入れ替える（左右/上下移動で使用）
-    function reorderKey(obj, key, dir){
-      const keys = Object.keys(obj);
-      const i = keys.indexOf(key);
-      const j = dir === 'up' ? i-1 : i+1;
-      if (i < 0 || j < 0 || j >= keys.length) return;
-      const newObj = {};
-      keys.forEach((k, idx) => {
-        if (idx === i) return; // skip
-        if (idx === j && dir === 'down') newObj[key] = obj[key];
-        newObj[k] = obj[k];
-        if (idx === j-1 && dir === 'up') newObj[key] = obj[key];
-      });
+   
       // 置換
       for (const k of Object.keys(obj)) delete obj[k];
       for (const k of Object.keys(newObj)) obj[k] = newObj[k];
@@ -815,3 +803,4 @@
   </script>
 </body>
 </html>
+
